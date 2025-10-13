@@ -1,0 +1,27 @@
+name: CI for Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Run helm lint
+        run: helm lint ./mail
+
+      - name: Run helm install dry-run
+        run: helm install --dry-run --debug mailstack ./mail --namespace email-stack

@@ -1,60 +1,28 @@
----
-- name: Deploy or update email-stack Helm chart (dry-run support)
-  hosts: smtp2
-  become: yes
-  vars:
-    chart_path: /home/jojo/helm-k8s-charts/mail
-    namespace: email-stack
-    release_name: mailstack
-    values_file: /home/jojo/helm-k8s-charts/mail/values.yaml
-    dry_run: true  # Set to false for real deployment
-  tasks:
-    - name: Check if email-stack namespace exists
-      ansible.builtin.command: kubectl get namespace {{ namespace }}
-      environment:
-        KUBECONFIG: /home/jojo/.kube/config
-      register: namespace_check
-      changed_when: false
-      failed_when: false
+name: CD Dry-Run Deployment
 
-    - name: Create email-stack namespace
-      ansible.builtin.command: kubectl create namespace {{ namespace }}
-      environment:
-        KUBECONFIG: /home/jojo/.kube/config
-      when: namespace_check.rc != 0
-      changed_when: true
-      check_mode: no  # Always create namespace if missing, even in dry-run
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode'
+        required: true
+        default: 'true'
+        type: boolean
 
-    - name: Check if mailstack Helm release is installed
-      ansible.builtin.command: helm list -n {{ namespace }} --filter {{ release_name }}
-      environment:
-        KUBECONFIG: /home/jojo/.kube/config
-      register: helm_check
-      changed_when: false
-      failed_when: false
+jobs:
+  dry-run-deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Simulate or perform Helm upgrade/install
-      kubernetes.core.helm:
-        name: {{ release_name }}
-        chart_ref: {{ chart_path }}
-        release_namespace: {{ namespace }}
-        state: present
-        values_files:
-          - {{ values_file }}
-      when: helm_check.rc != 0 or '{{ release_name }}' not in helm_check.stdout
-      check_mode: "{{ dry_run }}"  # Dry-run if true
-      changed_when: true
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
 
-    - name: Dry-run Helm template for simulation
-      ansible.builtin.command: helm template {{ release_name }} {{ chart_path }} -n {{ namespace }} --values {{ values_file }}
-      environment:
-        KUBECONFIG: /home/jojo/.kube/config
-      register: helm_template
-      changed_when: false
-      when: dry_run
-      check_mode: no  # Always run in dry-run mode
-
-    - name: Display Helm template output (dry-run only)
-      ansible.builtin.debug:
-        msg: "{{ helm_template.stdout }}"
-      when: dry_run and helm_template.stdout is defined
+      - name: Run Ansible playbook in dry-run mode
+        run: ansible-playbook -i ansible/inventory.yml ansible/deploy-email-stack.yml --check
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: False
+          ANSIBLE_SSH_ARGS: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"

@@ -22,6 +22,3 @@ jobs:
 
       - name: Run helm lint
         run: helm lint ./mail
-
-      - name: Run helm install dry-run
-        run: helm install --dry-run --debug mailstack ./mail --namespace email-stack

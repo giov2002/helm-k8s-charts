@@ -1,0 +1,112 @@
+name: 🚀 CD - Deploy Mail Chart
+
+on:
+  workflow_run:
+    workflows: ["🔍 CI - Mail Chart Validation"]
+    types:
+      - completed
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target_host:
+        description: 'Target host (smtp2 par défaut)'
+        required: false
+        default: 'smtp2'
+
+jobs:
+  deploy-mail:
+    name: 🚀 Deploy to K8s Cluster
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Ajouter les hosts connus
+          ssh-keyscan -H 197.158.77.40 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 197.158.77.60 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 41.204.120.179 >> ~/.ssh/known_hosts
+          
+          echo "✅ SSH configuré"
+
+      - name: ⚙️ Setup Ansible
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible sshpass
+          ansible --version
+
+      - name: 🔍 Test SSH Connectivity
+        run: |
+          echo "🔍 Test de connexion SSH vers smtp2..."
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no jojo@197.158.77.60 "echo '✅ Connexion SSH OK' && hostname"
+
+      - name: 📋 Display Ansible Inventory
+        run: |
+          echo "📋 === INVENTAIRE ANSIBLE ==="
+          cat ansible/inventory.yml
+
+      - name: 📋 Display Playbook
+        run: |
+          echo "📋 === PLAYBOOK CD ==="
+          cat ansible/cd-deploy-mail.yml
+
+      - name: 🚀 Deploy with Ansible
+        run: |
+          echo "🚀 === DÉPLOIEMENT EN COURS ==="
+          ansible-playbook ansible/cd-deploy-mail.yml \
+            -i ansible/inventory.yml \
+            -v
+
+      - name: ✅ Deployment Success
+        if: success()
+        run: |
+          echo ""
+          echo "🎉 =========================================="
+          echo "🎉    DÉPLOIEMENT RÉUSSI !"
+          echo "🎉 =========================================="
+          echo ""
+          echo "✅ Chart mail déployé sur le cluster K8s"
+          echo "📍 Namespace: email-stack"
+          echo "🌐 Nœuds: smtp1, smtp2, smtp3"
+          echo ""
+          echo "📋 Pour vérifier:"
+          echo "   ssh smtp2"
+          echo "   kubectl get pods -n email-stack"
+          echo "   kubectl get svc -n email-stack"
+
+      - name: ❌ Deployment Failed
+        if: failure()
+        run: |
+          echo ""
+          echo "💥 =========================================="
+          echo "💥      DÉPLOIEMENT ÉCHOUÉ"
+          echo "💥 =========================================="
+          echo ""
+          echo "❌ Le déploiement a rencontré des erreurs"
+          echo ""
+          echo "🔧 Vérifications à faire:"
+          echo "   1. Connectivité SSH vers smtp2"
+          echo "   2. Permissions sur le cluster K8s"
+          echo "   3. Logs Ansible ci-dessus"
+          echo "   4. État des pods: kubectl get pods -n email-stack"
+          exit 1
+
+      - name: 📊 Deployment Summary
+        if: always()
+        run: |
+          echo ""
+          echo "📊 === RÉSUMÉ DU DÉPLOIEMENT ==="
+          echo "🕒 Date: $(date)"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "💾 Commit: ${{ github.sha }}"
+          echo "👤 Auteur: ${{ github.actor }}"
+          echo "🚀 Workflow: ${{ github.workflow }}"

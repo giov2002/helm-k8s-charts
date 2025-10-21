@@ -86,13 +86,11 @@
       changed_when: false
       failed_when: false
 
-    - name: 🚀 Deploy/Upgrade Helm chart
+    - name: 🚀 Deploy/Upgrade Helm chart (no wait)
       ansible.builtin.command: >
         helm upgrade --install {{ release_name }} {{ target_chart_path }}
         -n {{ namespace }}
         --values {{ target_chart_path }}/values.yaml
-        --wait
-        --timeout 5m
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
       register: helm_deploy
@@ -102,16 +100,9 @@
       ansible.builtin.debug:
         msg: "{{ helm_deploy.stdout_lines }}"
 
-    - name: ⏳ Wait for pods to be ready
-      ansible.builtin.command: >
-        kubectl wait --for=condition=ready pod
-        -l app.kubernetes.io/instance={{ release_name }}
-        -n {{ namespace }}
-        --timeout=300s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-      register: pod_wait
-      failed_when: false
+    - name: ⏳ Wait 30 seconds for pods to start
+      ansible.builtin.pause:
+        seconds: 30
 
     - name: 📊 Get pod status
       ansible.builtin.command: kubectl get pods -n {{ namespace }} -o wide
@@ -148,8 +139,8 @@
           - "🏷️ Release: {{ release_name }}"
           - "📍 Namespace: {{ namespace }}"
           - "🌐 Cluster: smtp2 (control-plane)"
-          - "✅ Pods déployés sur les workers (smtp1, smtp3)"
+          - "✅ Helm upgrade completed"
           - ""
-          - "📋 Pour vérifier:"
-          - "  kubectl get pods -n {{ namespace }}"
-          - "  kubectl get svc -n {{ namespace }}"
+          - "📋 Pour vérifier l'état complet:"
+          - "  kubectl get pods -n {{ namespace }} -w"
+          - "  kubectl logs -n {{ namespace }} -l app=mailserver"

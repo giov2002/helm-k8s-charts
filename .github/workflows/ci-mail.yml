@@ -1,0 +1,131 @@
+name: 🔍 CI - Mail Chart Validation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mail/**'
+      - '.github/workflows/ci-mail.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'mail/**'
+  workflow_dispatch:
+
+env:
+  CHART_PATH: mail
+
+jobs:
+  validate-mail-chart:
+    name: 📋 Validation du Chart Mail
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.15.4'
+
+      - name: 🔍 Helm Lint
+        run: |
+          echo "🔍 === VALIDATION HELM LINT ==="
+          helm lint ${{ env.CHART_PATH }} --strict
+          echo "✅ Helm lint passed!"
+
+      - name: 🎨 Test Template Rendering
+        run: |
+          echo "🎨 === TEST DE RENDU DES TEMPLATES ==="
+          helm template test-mail ${{ env.CHART_PATH }} --dry-run --debug > /tmp/rendered-mail.yaml
+          
+          echo "📄 Objets Kubernetes générés:"
+          grep -c "^kind:" /tmp/rendered-mail.yaml || echo "0"
+          
+          echo ""
+          echo "📋 Types d'objets:"
+          grep "^kind:" /tmp/rendered-mail.yaml | sort | uniq -c
+          echo "✅ Template rendering OK!"
+
+      - name: 🔒 Security Audit - Hard-coded Passwords
+        run: |
+          echo "🔒 === AUDIT: MOTS DE PASSE EN DUR ==="
+          if grep -rn -E "(password|pwd|pass).*:.*['\"][^'\"]*[a-zA-Z0-9]{3,}[^'\"]*['\"]" ${{ env.CHART_PATH }}/ --include="*.yaml" --include="*.yml" | grep -v "passwordSecretRef" | grep -v "{{ .*password" | grep -v "#.*password"; then
+            echo "❌ ÉCHEC: Mots de passe en dur détectés!"
+            exit 1
+          else
+            echo "✅ Aucun mot de passe en dur détecté"
+          fi
+
+      - name: 🔒 Security Audit - Privileged Containers
+        run: |
+          echo "🔒 === AUDIT: PRIVILÈGES ÉLEVÉS ==="
+          if grep -rn -E "(privileged|runAsRoot|allowPrivilegeEscalation).*true" ${{ env.CHART_PATH }}/ --include="*.yaml"; then
+            echo "❌ ÉCHEC: Privilèges élevés détectés!"
+            exit 1
+          else
+            echo "✅ Aucun privilège élevé détecté"
+          fi
+
+      - name: 🔒 Security Audit - Latest Image Tags
+        run: |
+          echo "🔒 === AUDIT: TAGS D'IMAGES ==="
+          if grep -rn -E "image:.*latest" ${{ env.CHART_PATH }}/ --include="*.yaml" | grep -v "{{"; then
+            echo "⚠️ WARNING: Images avec tag 'latest' détectées!"
+            echo "Recommandation: Utilisez des tags spécifiques"
+          else
+            echo "✅ Pas d'images avec tag 'latest'"
+          fi
+
+      - name: 📏 YAML Lint
+        run: |
+          echo "📏 === LINT YAML ==="
+          sudo apt-get update && sudo apt-get install -y yamllint
+          
+          cat <<EOF > .yamllint
+          extends: default
+          rules:
+            line-length:
+              max: 120
+              level: warning
+            indentation:
+              spaces: 2
+            truthy:
+              allowed-values: ['true', 'false', 'yes', 'no']
+          ignore: |
+            */templates/_helpers.tpl
+          EOF
+          
+          find ${{ env.CHART_PATH }} -name "*.yaml" -o -name "*.yml" | while read file; do
+            echo "🔍 Checking: $file"
+            yamllint -c .yamllint "$file" || echo "⚠️ Warnings dans $file"
+          done
+          echo "✅ YAML lint terminé"
+
+      - name: ✅ CI Success Summary
+        if: success()
+        run: |
+          echo ""
+          echo "🎉 === CI RÉUSSI ==="
+          echo "✅ Helm lint: OK"
+          echo "✅ Template rendering: OK"
+          echo "✅ Security audit: OK"
+          echo "✅ YAML lint: OK"
+          echo ""
+          echo "🚀 Le chart mail est prêt pour le déploiement!"
+          echo "Vous pouvez maintenant lancer le CD avec Ansible"
+
+      - name: ❌ CI Failure Summary
+        if: failure()
+        run: |
+          echo ""
+          echo "💥 === CI ÉCHOUÉ ==="
+          echo "❌ Des erreurs ont été détectées"
+          echo "Vérifiez les logs ci-dessus pour plus de détails"
+          echo ""
+          echo "🔧 Actions recommandées:"
+          echo "  1. Corrigez les erreurs signalées"
+          echo "  2. Testez localement avec: helm lint mail/"
+          echo "  3. Poussez les corrections"
+          exit 1

@@ -1,0 +1,57 @@
+name: 🚀 CD - Deploy Mail Chart
+
+on:
+  workflow_run:
+    workflows: ["🔍 CI - Mail Chart Validation"]
+    types:
+      - completed
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy-mail:
+    name: 🚀 Deploy to K8s Cluster
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 197.158.77.60 >> ~/.ssh/known_hosts
+
+      - name: ⚙️ Setup Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: 📋 Verify Ansible inventory
+        run: |
+          cat ansible/inventory.yml
+
+      - name: 🚀 Deploy with Ansible
+        run: |
+          ansible-playbook ansible/cd-deploy-mail.yml -i ansible/inventory.yml -v
+
+      - name: ✅ Deployment Success
+        if: success()
+        run: |
+          echo "🎉 === DÉPLOIEMENT RÉUSSI ==="
+          echo "✅ Le chart mail a été déployé sur le cluster K8s"
+          echo "📍 Namespace: email-stack"
+          echo "🌐 Cluster: smtp1, smtp2, smtp3"
+
+      - name: ❌ Deployment Failed
+        if: failure()
+        run: |
+          echo "💥 === DÉPLOIEMENT ÉCHOUÉ ==="
+          echo "❌ Vérifiez les logs ci-dessus"
+          echo "🔧 Vérifiez la connectivité SSH vers smtp2"
+          exit 1

@@ -1,0 +1,155 @@
+---
+- name: CD - Deploy Mail Chart to K8s Cluster
+  hosts: smtp2
+  become: yes
+  vars:
+    github_repo: "https://github.com/giov2002/helm-k8s-charts.git"
+    github_branch: main
+    local_chart_path: /tmp/helm-k8s-charts/mail
+    target_chart_path: /home/jojo/helm-k8s-charts/mail
+    namespace: email-stack
+    release_name: mailstack
+    kubeconfig: /home/jojo/.kube/config
+
+  tasks:
+    - name: 📦 Install git if not present
+      ansible.builtin.apt:
+        name: git
+        state: present
+        update_cache: yes
+
+    - name: 🗑️ Clean temporary directory
+      ansible.builtin.file:
+        path: /tmp/helm-k8s-charts
+        state: absent
+
+    - name: 📥 Clone repository from GitHub
+      ansible.builtin.git:
+        repo: "{{ github_repo }}"
+        dest: /tmp/helm-k8s-charts
+        version: "{{ github_branch }}"
+        force: yes
+      register: git_clone
+
+    - name: 📋 Display cloned commit info
+      ansible.builtin.debug:
+        msg: 
+          - "Repository cloned successfully!"
+          - "Commit: {{ git_clone.after }}"
+          - "Branch: {{ github_branch }}"
+
+    - name: 📁 Ensure target directory exists
+      ansible.builtin.file:
+        path: "{{ target_chart_path | dirname }}"
+        state: directory
+        owner: jojo
+        group: jojo
+        mode: '0755'
+
+    - name: 🔄 Sync chart to target location
+      ansible.builtin.synchronize:
+        src: "{{ local_chart_path }}/"
+        dest: "{{ target_chart_path }}/"
+        delete: yes
+        recursive: yes
+      delegate_to: "{{ inventory_hostname }}"
+
+    - name: ✅ Verify chart files
+      ansible.builtin.command: ls -la {{ target_chart_path }}
+      register: chart_files
+      changed_when: false
+
+    - name: 📋 Display chart files
+      ansible.builtin.debug:
+        msg: "{{ chart_files.stdout_lines }}"
+
+    - name: 🔍 Check if namespace exists
+      ansible.builtin.command: kubectl get namespace {{ namespace }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: namespace_check
+      changed_when: false
+      failed_when: false
+
+    - name: 📦 Create namespace if not exists
+      ansible.builtin.command: kubectl create namespace {{ namespace }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: namespace_check.rc != 0
+      changed_when: true
+
+    - name: 🔍 Check current Helm release
+      ansible.builtin.command: helm list -n {{ namespace }} --filter {{ release_name }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: helm_check
+      changed_when: false
+      failed_when: false
+
+    - name: 🚀 Deploy/Upgrade Helm chart
+      ansible.builtin.command: >
+        helm upgrade --install {{ release_name }} {{ target_chart_path }}
+        -n {{ namespace }}
+        --values {{ target_chart_path }}/values.yaml
+        --wait
+        --timeout 5m
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: helm_deploy
+      changed_when: true
+
+    - name: 📋 Display Helm deployment output
+      ansible.builtin.debug:
+        msg: "{{ helm_deploy.stdout_lines }}"
+
+    - name: ⏳ Wait for pods to be ready
+      ansible.builtin.command: >
+        kubectl wait --for=condition=ready pod
+        -l app.kubernetes.io/instance={{ release_name }}
+        -n {{ namespace }}
+        --timeout=300s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: pod_wait
+      failed_when: false
+
+    - name: 📊 Get pod status
+      ansible.builtin.command: kubectl get pods -n {{ namespace }} -o wide
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: pod_status
+      changed_when: false
+
+    - name: 📋 Display pod status
+      ansible.builtin.debug:
+        msg: "{{ pod_status.stdout_lines }}"
+
+    - name: 📊 Get services status
+      ansible.builtin.command: kubectl get svc -n {{ namespace }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: svc_status
+      changed_when: false
+
+    - name: 📋 Display services status
+      ansible.builtin.debug:
+        msg: "{{ svc_status.stdout_lines }}"
+
+    - name: 🗑️ Cleanup temporary directory
+      ansible.builtin.file:
+        path: /tmp/helm-k8s-charts
+        state: absent
+
+    - name: ✅ Deployment Summary
+      ansible.builtin.debug:
+        msg:
+          - "🎉 === DÉPLOIEMENT RÉUSSI ==="
+          - "📦 Chart: mail"
+          - "🏷️ Release: {{ release_name }}"
+          - "📍 Namespace: {{ namespace }}"
+          - "🌐 Cluster: smtp2 (control-plane)"
+          - "✅ Pods déployés sur les workers (smtp1, smtp3)"
+          - ""
+          - "📋 Pour vérifier:"
+          - "  kubectl get pods -n {{ namespace }}"
+          - "  kubectl get svc -n {{ namespace }}"

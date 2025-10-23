@@ -7,11 +7,6 @@ on:
       - completed
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      target_host:
-        description: 'Target host (smtp2 par défaut)'
-        required: false
-        default: 'smtp2'
 
 jobs:
   deploy-mail:
@@ -23,48 +18,49 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup SSH
+      - name: ⚙️ Setup SSH with ED25519 key
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
           
-          # Ajouter les hosts connus
-          ssh-keyscan -H 197.158.77.40 >> ~/.ssh/known_hosts
-          ssh-keyscan -H 197.158.77.60 >> ~/.ssh/known_hosts
-          ssh-keyscan -H 41.204.120.179 >> ~/.ssh/known_hosts
+          # Créer config SSH
+          cat > ~/.ssh/config <<EOF
+          Host smtp2
+            HostName 197.158.77.60
+            User jojo
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
           
-          echo "✅ SSH configuré"
+          chmod 600 ~/.ssh/config
+          
+          echo "✅ SSH configuré avec clé ED25519"
+          echo "🔑 Fingerprint de la clé:"
+          ssh-keygen -l -f ~/.ssh/id_ed25519
 
       - name: ⚙️ Setup Ansible
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y ansible sshpass
+          sudo apt-get install -y ansible
           ansible --version
 
-      - name: 🔍 Test SSH Connectivity
+      - name: 🔍 Test SSH Connectivity (verbose)
         run: |
           echo "🔍 Test de connexion SSH vers smtp2..."
-          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no jojo@197.158.77.60 "echo '✅ Connexion SSH OK' && hostname"
-
-      - name: 📋 Display Ansible Inventory
-        run: |
-          echo "📋 === INVENTAIRE ANSIBLE ==="
-          cat ansible/inventory.yml
-
-      - name: 📋 Display Playbook
-        run: |
-          echo "📋 === PLAYBOOK CD ==="
-          cat ansible/cd-deploy-mail.yml
+          echo "📋 Configuration SSH:"
+          cat ~/.ssh/config
+          echo ""
+          echo "🔌 Test de connexion:"
+          ssh -v smtp2 "echo '✅ SSH OK' && hostname && whoami && sudo -n whoami" 2>&1 | tail -20
 
       - name: 🚀 Deploy with Ansible
         run: |
           echo "🚀 === DÉPLOIEMENT EN COURS ==="
-          ansible-playbook ansible/cd-deploy-mail.yml \
-            -i ansible/inventory.yml \
-            -v
+          ansible-playbook ansible/cd-deploy-mail.yml -i ansible/inventory.yml -v
 
       - name: ✅ Deployment Success
         if: success()
@@ -76,12 +72,7 @@ jobs:
           echo ""
           echo "✅ Chart mail déployé sur le cluster K8s"
           echo "📍 Namespace: email-stack"
-          echo "🌐 Nœuds: smtp1, smtp2, smtp3"
-          echo ""
-          echo "📋 Pour vérifier:"
-          echo "   ssh smtp2"
-          echo "   kubectl get pods -n email-stack"
-          echo "   kubectl get svc -n email-stack"
+          echo "🌐 Cluster: smtp1, smtp2, smtp3"
 
       - name: ❌ Deployment Failed
         if: failure()
@@ -91,22 +82,5 @@ jobs:
           echo "💥      DÉPLOIEMENT ÉCHOUÉ"
           echo "💥 =========================================="
           echo ""
-          echo "❌ Le déploiement a rencontré des erreurs"
-          echo ""
-          echo "🔧 Vérifications à faire:"
-          echo "   1. Connectivité SSH vers smtp2"
-          echo "   2. Permissions sur le cluster K8s"
-          echo "   3. Logs Ansible ci-dessus"
-          echo "   4. État des pods: kubectl get pods -n email-stack"
+          echo "❌ Vérifiez les logs ci-dessus"
           exit 1
-
-      - name: 📊 Deployment Summary
-        if: always()
-        run: |
-          echo ""
-          echo "📊 === RÉSUMÉ DU DÉPLOIEMENT ==="
-          echo "🕒 Date: $(date)"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-          echo "💾 Commit: ${{ github.sha }}"
-          echo "👤 Auteur: ${{ github.actor }}"
-          echo "🚀 Workflow: ${{ github.workflow }}"

@@ -18,7 +18,7 @@ env:
 jobs:
   validate-mail-chart:
     name: 📋 Validation du Chart Mail
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     
     steps:
       - name: 📥 Checkout code

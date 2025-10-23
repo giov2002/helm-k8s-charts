@@ -11,7 +11,7 @@ on:
 jobs:
   deploy-mail:
     name: 🚀 Deploy to K8s Cluster
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     
     steps:

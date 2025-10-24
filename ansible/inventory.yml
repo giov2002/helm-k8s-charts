@@ -10,4 +10,6 @@ all:
       ansible_host: 41.204.120.179
       ansible_user: jojo
   vars:
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_become: yes
+    ansible_become_method: sudo

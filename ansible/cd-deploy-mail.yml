@@ -12,6 +12,7 @@
     kubeconfig: /home/jojo/.kube/config
 
   tasks:
+    
     - name: 📦 Install git if not present
       ansible.builtin.apt:
         name: git

@@ -1,0 +1,62 @@
+{{- if .Values.exporters.postfix.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postfix-exporter
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postfix-exporter
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postfix-exporter
+  template:
+    metadata:
+      labels:
+        app: postfix-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9154"
+    spec:
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: postfix-exporter
+        image: "{{ .Values.exporters.postfix.image.repository }}:{{ .Values.exporters.postfix.image.tag }}"
+        imagePullPolicy: {{ .Values.exporters.postfix.image.pullPolicy }}
+        ports:
+        - name: metrics
+          containerPort: 9154
+          protocol: TCP
+        env:
+        - name: POSTFIX_LOGFILE_PATH
+          value: "/var/log/mail/mail.log"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postfix-exporter
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postfix-exporter
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: postfix-exporter
+  ports:
+  - name: metrics
+    port: 9154
+    targetPort: 9154
+    protocol: TCP
+{{- end }}

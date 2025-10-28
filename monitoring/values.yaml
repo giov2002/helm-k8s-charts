@@ -1,0 +1,129 @@
+# Configuration globale
+global:
+  namespace: monitoring
+  storageClass: longhorn
+
+# Configuration Prometheus
+prometheus:
+  enabled: true
+  image:
+    repository: prom/prometheus
+    tag: v2.47.0
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  service:
+    type: NodePort
+    port: 9090
+    nodePort: 30090
+  
+  persistence:
+    enabled: true
+    size: 10Gi
+  
+  retention: 15d
+  
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  # Cibles à scraper
+  scrapeConfigs:
+    # Mailserver
+    - job_name: 'mailserver'
+      static_configs:
+        - targets: ['mailserver.email-stack.svc.cluster.local:25']
+      metrics_path: '/metrics'
+      scrape_interval: 30s
+    
+    # Roundcube
+    - job_name: 'roundcube'
+      static_configs:
+        - targets: ['roundcube.email-stack.svc.cluster.local:80']
+      scrape_interval: 30s
+    
+    # Kubernetes
+    - job_name: 'kubernetes-pods'
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+              - email-stack
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+
+# Configuration Grafana
+grafana:
+  enabled: true
+  image:
+    repository: grafana/grafana
+    tag: 10.1.5
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30030
+  
+  persistence:
+    enabled: true
+    size: 5Gi
+  
+  admin:
+    user: admin
+    password: admin123  # À changer en production !
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Exporters de métriques
+exporters:
+  # Postfix exporter (pour métriques SMTP)
+  postfix:
+    enabled: true
+    image:
+      repository: kumina/postfix-exporter
+      tag: latest
+      pullPolicy: IfNotPresent
+  
+  # Node exporter (métriques système)
+  node:
+    enabled: true
+    image:
+      repository: prom/node-exporter
+      tag: v1.6.1
+      pullPolicy: IfNotPresent
+
+# Dashboards Grafana prédéfinis
+dashboards:
+  mailserver:
+    enabled: true
+  roundcube:
+    enabled: true
+  kubernetes:
+    enabled: true
+
+# Affinity - Déployer sur les workers
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role.kubernetes.io/control-plane
+          operator: DoesNotExist
+
+tolerations: []

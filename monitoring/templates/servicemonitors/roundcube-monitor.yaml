@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: roundcube-metrics
+  namespace: email-stack
+  labels:
+    app: roundcube
+    monitoring: "true"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/metrics"
+spec:
+  clusterIP: None
+  selector:
+    app: roundcube
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80

@@ -1,0 +1,21 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "monitoring.grafana.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.grafana.service.type }}
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: {{ .Values.grafana.service.port }}
+    targetPort: http
+    protocol: TCP
+    {{- if and (eq .Values.grafana.service.type "NodePort") .Values.grafana.service.nodePort }}
+    nodePort: {{ .Values.grafana.service.nodePort }}
+    {{- end }}
+{{- end }}

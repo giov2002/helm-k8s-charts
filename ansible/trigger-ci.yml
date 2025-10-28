@@ -1,0 +1,73 @@
+---
+- name: Trigger GitHub Actions CI
+  hosts: localhost
+  gather_facts: no
+  vars:
+    github_owner: "giov2002"
+    github_repo: "helm-k8s-charts"
+    github_branch: "main"
+    workflow_file: "ci-mail.yml"
+    github_token: "{{ lookup('env', 'GITHUB_PAT') }}"
+  
+  tasks:
+    - name: ✅ Verify GitHub token
+      ansible.builtin.fail:
+        msg: "GitHub token required. Set: export GITHUB_PAT='your_token'"
+      when: github_token == ""
+    
+    - name: 🔍 Test GitHub connectivity
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ github_owner }}/{{ github_repo }}"
+        headers:
+          Authorization: "token {{ github_token }}"
+        method: GET
+      register: github_test
+    
+    - name: 📋 Display repo info
+      ansible.builtin.debug:
+        msg: 
+          - "Repository: {{ github_test.json.full_name }}"
+          - "Default branch: {{ github_test.json.default_branch }}"
+          - "Last push: {{ github_test.json.pushed_at }}"
+    
+    - name: 🚀 Trigger GitHub Actions CI workflow
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ github_owner }}/{{ github_repo }}/actions/workflows/{{ workflow_file }}/dispatches"
+        method: POST
+        headers:
+          Authorization: "token {{ github_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          ref: "{{ github_branch }}"
+        status_code: 204
+      register: workflow_trigger
+    
+    - name: ✅ CI Triggered Successfully
+      ansible.builtin.debug:
+        msg:
+          - "🎉 CI workflow triggered successfully!"
+          - "Check status: https://github.com/{{ github_owner }}/{{ github_repo }}/actions"
+          - "Workflow: {{ workflow_file }}"
+          - "Branch: {{ github_branch }}"
+    
+    - name: ⏳ Wait 5 seconds for workflow to start
+      ansible.builtin.pause:
+        seconds: 5
+    
+    - name: 🔍 Get latest workflow run
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ github_owner }}/{{ github_repo }}/actions/workflows/{{ workflow_file }}/runs?per_page=1"
+        headers:
+          Authorization: "token {{ github_token }}"
+        method: GET
+      register: workflow_runs
+    
+    - name: 📋 Display workflow status
+      ansible.builtin.debug:
+        msg:
+          - "Latest run ID: {{ workflow_runs.json.workflow_runs[0].id }}"
+          - "Status: {{ workflow_runs.json.workflow_runs[0].status }}"
+          - "Conclusion: {{ workflow_runs.json.workflow_runs[0].conclusion | default('In progress') }}"
+          - "URL: {{ workflow_runs.json.workflow_runs[0].html_url }}"
+      when: workflow_runs.json.total_count > 0

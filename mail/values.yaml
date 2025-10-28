@@ -54,7 +54,7 @@ mailserver:
     - email: "lalaina@mail.local"
       password: "lalaina"
     - email: "harivony@mail.local"
-      password: "harivon"
+      password: "harivony"
   
   # Comptes email supplémentaires (optionnel)
   extraAccounts: |

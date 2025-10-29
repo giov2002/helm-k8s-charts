@@ -1,129 +1,91 @@
-# Configuration globale
-global:
-  namespace: monitoring
-  storageClass: longhorn
-
-# Configuration Prometheus
+# Configuration de Prometheus
 prometheus:
-  enabled: true
   image:
     repository: prom/prometheus
-    tag: v2.47.0
+    tag: "v2.52.0"
     pullPolicy: IfNotPresent
-  
-  replicaCount: 1
-  
+  scrapeInterval: 15s
   service:
     type: NodePort
     port: 9090
     nodePort: 30090
-  
-  persistence:
-    enabled: true
-    size: 10Gi
-  
-  retention: 15d
-  
   resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-  
-  # Cibles à scraper
-  scrapeConfigs:
-    # Mailserver
-    - job_name: 'mailserver'
-      static_configs:
-        - targets: ['mailserver.email-stack.svc.cluster.local:25']
-      metrics_path: '/metrics'
-      scrape_interval: 30s
-    
-    # Roundcube
-    - job_name: 'roundcube'
-      static_configs:
-        - targets: ['roundcube.email-stack.svc.cluster.local:80']
-      scrape_interval: 30s
-    
-    # Kubernetes
-    - job_name: 'kubernetes-pods'
-      kubernetes_sd_configs:
-        - role: pod
-          namespaces:
-            names:
-              - email-stack
-      relabel_configs:
-        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-          action: keep
-          regex: true
-
-# Configuration Grafana
-grafana:
-  enabled: true
-  image:
-    repository: grafana/grafana
-    tag: 10.1.5
-    pullPolicy: IfNotPresent
-  
-  replicaCount: 1
-  
-  service:
-    type: NodePort
-    port: 3000
-    nodePort: 30030
-  
-  persistence:
-    enabled: true
-    size: 5Gi
-  
-  admin:
-    user: admin
-    password: admin123  # À changer en production !
-  
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
     limits:
       cpu: 500m
-      memory: 1Gi
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
 
-# Exporters de métriques
-exporters:
-  # Postfix exporter (pour métriques SMTP)
-  postfix:
-    enabled: true
-    image:
-      repository: kumina/postfix-exporter
-      tag: latest
-      pullPolicy: IfNotPresent
-  
-  # Node exporter (métriques système)
-  node:
-    enabled: true
-    image:
-      repository: prom/node-exporter
-      tag: v1.6.1
-      pullPolicy: IfNotPresent
+# Configuration de Grafana
+grafana:
+  image:
+    repository: grafana/grafana
+    tag: "10.2.2"
+    pullPolicy: IfNotPresent
+  adminPassword: "admin123"
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30030
+  resources:
+    limits:
+      cpu: 300m
+      memory: 256Mi
+    requests:
+      cpu: 150m
+      memory: 128Mi
 
-# Dashboards Grafana prédéfinis
-dashboards:
-  mailserver:
-    enabled: true
-  roundcube:
-    enabled: true
-  kubernetes:
-    enabled: true
+# Configuration Mailserver Exporter
+mailserverExporter:
+  image:
+    repository: prom/node-exporter
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 9100
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
 
-# Affinity - Déployer sur les workers
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: node-role.kubernetes.io/control-plane
-          operator: DoesNotExist
+# Configuration Roundcube Exporter
+roundcubeExporter:
+  image:
+    repository: prom/node-exporter
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 9101
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
 
-tolerations: []
+# Configuration Node Exporter
+nodeExporter:
+  image:
+    repository: prom/node-exporter
+    tag: "v1.6.1"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 9100
+
+# Configuration Kube State Metrics
+kubeStateMetrics:
+  image:
+    repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+    tag: "v2.9.2"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080

@@ -1,14 +1,8 @@
 apiVersion: v2
 name: monitoring
-version: 1.0.0
-appVersion: "1.0.0"
-description: Monitoring stack with Prometheus and Grafana for mail services
+description: Monitoring stack for email services
 type: application
-keywords:
-  - monitoring
-  - prometheus
-  - grafana
-  - metrics
-  - observability
+version: 1.0.0
+appVersion: "1.0"
 maintainers:
   - name: jojo

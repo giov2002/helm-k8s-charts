@@ -1,39 +1,23 @@
-{{/*
-Expand the name of the chart.
-*/}}
 {{- define "monitoring.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
-{{- end }}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
 
-{{/*
-Create chart name and version as used by the chart label.
-*/}}
-{{- define "monitoring.chart" -}}
-{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
-{{- end }}
+{{- define "monitoring.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 
-{{/*
-Common labels
-*/}}
 {{- define "monitoring.labels" -}}
-helm.sh/chart: {{ include "monitoring.chart" . }}
+helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+app.kubernetes.io/name: {{ include "monitoring.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-{{- end }}
-
-{{/*
-Prometheus labels
-*/}}
-{{- define "monitoring.prometheus.labels" -}}
-{{ include "monitoring.labels" . }}
-app.kubernetes.io/name: prometheus
-app.kubernetes.io/component: monitoring
-{{- end }}
-
-{{/*
-Grafana labels
-*/}}
-{{- define "monitoring.grafana.labels" -}}
-{{ include "monitoring.labels" . }}
-app.kubernetes.io/name: grafana
-app.kubernetes.io/component: visualization
-{{- end }}
+{{- end -}}

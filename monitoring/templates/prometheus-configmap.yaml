@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "monitoring.fullname" . }}-prometheus-config
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: {{ .Values.prometheus.scrapeInterval }}
+    
+    scrape_configs:
+    - job_name: 'prometheus'
+      static_configs:
+      - targets:
+        - 'localhost:9090'
+    
+    - job_name: 'mailserver-exporter'
+      static_configs:
+      - targets:
+        - '{{ include "monitoring.fullname" . }}-mailserver-exporter:9100'
+    
+    - job_name: 'roundcube-exporter'
+      static_configs:
+      - targets:
+        - '{{ include "monitoring.fullname" . }}-roundcube-exporter:9101'
+    
+    - job_name: 'kube-state-metrics'
+      static_configs:
+      - targets:
+        - '{{ include "monitoring.fullname" . }}-kube-state-metrics:8080'
+    
+    - job_name: 'node-exporter'
+      static_configs:
+      - targets:
+        - '{{ include "monitoring.fullname" . }}-node-exporter:9100'
